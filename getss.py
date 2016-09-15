@@ -7,7 +7,7 @@ import requests
 
 ssURL = "http://www.ishadowsocks.org/"
 page = requests.get(ssURL)
-soup = BeautifulSoup(page.content,"lxml")
+soup = BeautifulSoup(page.content,"html.parser")
 
 authALL = soup.findAll(class_="col-lg-4 text-center")
 sourceLis = []
