@@ -1,0 +1,255 @@
+#coding: utf-8
+#compute node ha
+
+import sys
+import requests
+import time
+import logging
+import os
+import subprocess as sp
+from ConfigParser import ConfigParser
+from pprint import pprint
+
+
+DEVNULL = open(os.devnull, 'wb')
+logfile = "/var/log/cmpha.log"
+debug=False
+debug=True
+
+level = logging.WARNING if not debug else logging.DEBUG
+logging.basicConfig(level=level,
+                format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+                datefmt='%a, %d %b %Y %H:%M:%S',
+                filename=logfile,
+                filemode='a')
+
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('[line:%(lineno)d]:%(levelname)s %(message)s')
+console.setFormatter(formatter)
+logging.getLogger('').addHandler(console)
+
+class baseInfo(object):
+    """init the info of all compute, and get the token for access the api"""
+
+    def __init__(self):
+        confFile = sys.argv[1]
+        #a = requests.adapters.HTTPAdapter(pool_connections=3, pool_maxsize=5)
+        #self.s = requests.Session()
+        #self.s.mount("http://",a)
+        #self.s.mount("https://",a)
+
+        headers = {}
+        headers["Content-Type"] = "application/json"
+
+        self.cf = ConfigParser()
+        self.cf.read(confFile)
+        self.conf = self.getConf()
+        self.headers = headers
+
+        self.catalog, self.token = self.getToken()
+        self.url = [url for url in self.catalog if url["name"] == "nova"]
+        self.url = self.url[0]["endpoints"][0]["publicURL"]
+
+    def getConf(self):
+        try:
+            conf = {
+                "url": self.cf.get("ser","OS_AUTH_URL"),
+                "uname" : self.cf.get("ser","OS_USERNAME"),
+                "passwd" : self.cf.get("ser","OS_PASSWORD"),
+                "tname" : self.cf.get("ser","OS_TENANT_NAME"),
+                "interval" : self.cf.get("ser","INTERVAL")}
+
+        except Exception as e:
+                logging.critical("加载配置文件失败")
+                logging.critical(e)
+                sys.exit(1)
+
+        return conf
+
+    def getToken(self):
+        headers = self.headers
+        url = self.conf["url"] + "/tokens"
+        data = '{"auth": {"tenantName": "%s", "passwordCredentials": {"username": "%s", "password": "%s"}}}'
+        data = data % (self.conf["tname"], self.conf["uname"], self.conf["passwd"])
+        try:
+            logging.debug("开始获取Token")
+            ret = requests.post(url, data=data, headers=headers)
+            logging.debug("request url:%s" % ret.request.url)
+            ret = ret.json()
+        except Exception as e:
+            msg = "获取Token失败 data:%s headers:%s" % (data, headers)
+            logging.critical(msg)
+            logging.critical(e)
+
+        catalog = ret["access"]["serviceCatalog"]
+        token = ret["access"]["token"]["id"]
+
+        return catalog, token
+
+    def getResp(self, suffix, method, data=None, headers=None, params=None, isjson=True):
+        """return the result of requests"""
+        url = self.url + suffix
+        if headers == None:
+            headers = self.headers.copy()
+        headers["X-Auth-Token"] = self.token
+
+        req = getattr(requests, method)
+        try:
+            ret = req(url, data=data, headers=headers, params=params, verify=False)
+        except Exception as e:
+            msg = "%s访问%s失败 data:%s headers:%s" % (method, suffix, data, headers)
+            logging.critical(msg)
+            logging.critical(e)
+            sys.exit(1)
+
+        if ret.status_code == 401:
+            logging.info("Token 过期,重新获取Token")
+            self.catalog, self.token = self.getToken()
+            headers["X-Auth-Token"] = self.token
+            logging.debug("request headers:%s" % ret.request.headers)
+            ret = req(url, data=data, headers=headers)
+
+        if isjson:
+            ret = ret.json()
+
+        return ret
+
+class check(baseInfo):
+    """check the status of compute node"""
+
+    def check(self):
+        self.cmpDown, self.cmpAll= self.chkNode()
+        self.serDown = []
+        self.chkSerFromNode()
+
+    def chkNode(self):
+        """get the compute list service down"""
+        suffix = "/os-services"
+        ret  = self.getResp(suffix, "get")
+        ret = ret["services"]
+
+        cmpAll = [host["host"] for host in ret if host["binary"] == "nova-compute"]
+        cmpDown = [host["host"] for host in ret if host["state"] != "up" and host["binary"] == "nova-compute"]
+
+        return cmpDown,cmpAll
+
+    def chkSerFromNode(self):
+        """get the server list from failed node"""
+        suffix = "/servers/detail"
+        cc = self.cf.options("ser")
+        params = None
+        if "ADMIN" in cc:
+            admin = self.cf.get("ser", "ADMIN")
+            if admin.lower() == "true":
+                params = {"all_tenants":1}
+
+        ret = self.getResp(suffix, "get", params=params)
+
+        ret = ret["servers"]
+        serDown = [ser["id"] for ser in ret if ser["OS-EXT-SRV-ATTR:host"] in self.cmpDown]
+        self.serDown.extend(serDown)
+
+    def test(self):
+        print "cmpDown:", self.cmpDown
+        print "serDown:", self.serDown
+
+class fence(baseInfo):
+    """fence the compute node"""
+    def __init__(self):
+        super(fence, self).__init__()
+        pass
+
+    def fencePre(self, host):
+        """disable nova-compute"""
+        suffix = "/os-services/disable"
+        data = '{"host": "%s","binary": "nova-compute"}' % host
+        ret = self.getResp(suffix, "put", data=data, isjson=False)
+
+        return ret.ok
+
+    def fenceTest(self, host):
+        """fence for test"""
+        cmd = " ".join(["ssh", host, "'touch /tmp/`date +%Y-%m-%d`'"])
+        p = sp.Popen(cmd, shell=True, stdout=sp.PIPE,stderr=sp.PIPE)
+        retCode = p.wait()
+
+        return retCode
+
+    def test(self):
+        for h in self.host:
+            print self.fencePre(h)
+            print self.fenceTest(h)
+
+    def fence(self, host):
+        for h in host:
+            self.fencePre(h)
+            self.fenceTest(h)
+
+class recover(baseInfo):
+    """evacuate the all installce from the failed compute node"""
+    def __init__(self):
+        super(recover, self).__init__()
+        pass
+
+    def evacuate(self, serID):
+        """evacuate the server"""
+        suffix = "/servers/%s/action" % serID
+        data = '{"evacuate": {"onSharedStorage": "True"}}'
+        ret = self.getResp(suffix, "post", data=data, isjson=False)
+
+        return ret.ok
+
+    def check(self, serID):
+        """check the instance whether if evacuated success"""
+        suffix = "/servers/%s" % serID
+        ret = self.getResp(suffix, "get")
+        status = ret["server"]["status"]
+        print status
+
+        return status
+
+    def recover(self, serID):
+        for s in serID:
+            self.evacuate(s)
+            time.sleep(0.5)
+
+def test():
+    ch = check()
+    ch.test()
+    fen = fence(ch.cmpDown)
+    fen.test()
+
+def main():
+    if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
+        ch = check()
+        fen = fence()
+        recov = recover()
+        while True:
+            interval = ch.conf["interval"]
+
+            try:
+                interval = int(interval)
+            except Exception as e:
+                msg = "时间间隔设置有误 interval:%s" % interval
+                logging.critical(msg)
+                logging.critical(e)
+                sys.exit(1)
+
+            cmd = "pcs status|grep 'Current DC'|grep `hostname`"
+            p = sp.Popen(cmd, shell=True, stdout=DEVNULL, stderr=sp.STDOUT)
+            vip = p.wait()
+            if not vip:
+                ch.check()
+                logging.info("失败的计算节点%s" %ch.cmpDown)
+                fen.fence(ch.cmpDown)
+                logging.info("失败的计算节点下面的server %s" %ch.serDown)
+                recov.recover(ch.serDown)
+
+            time.sleep(interval)
+    else:
+        print "配置文件不存在"
+
+if __name__ == "__main__":
+    main()
+    #test()
