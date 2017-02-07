@@ -1,5 +1,9 @@
 #coding=utf-8
 
+"""
+通过saltstatck获取资产清单
+"""
+
 import salt.client as sc
 from sh import salt
 import json
