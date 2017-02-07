@@ -1,6 +1,10 @@
 #coding: utf-8
 #compute node ha
 
+"""
+计算节点高可用
+"""
+
 import sys
 import requests
 import time
