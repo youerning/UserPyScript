@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Mypanel" %}{% endblock %}
+
+{% block page_header %}
+  <script src="http://code.highcharts.com/highcharts.js"></script>
+  <link rel="stylesheet" type="text/css" href="//cdn.datatables.net/1.10.12/css/jquery.dataTables.css">
+  <script type="text/javascript" charset="utf8" src="//cdn.datatables.net/1.10.12/js/jquery.dataTables.js"></script>
+  <script src="http://code.highcharts.com/modules/exporting.js"></script>
+  <script src="http://highcharts.github.io/export-csv/export-csv.js"></script>
+  {% include "horizon/common/_page_header.html" with title=_("Mypanel") %}
+{% endblock page_header %}
+
+{% block main %}
+{% autoescape off %}
+<div class="row">
+<div class="btn-group" align="center">
+  <button type="button" class="btn btn-default active ">最近<a href="＃"></a></button>
+  <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+  <span class="caret"></span>
+  </button>
+      <ul class="dropdown-menu">
+        <li {% if lasttime.l1.0 = rg %} class="active" {% endif %}><a href="{% url 'horizon:project:mypanel:hostid' hostid=host %}?rg={{lasttime.l1.0}}&index={{ind}}&hn={{hn}}">一天</a></li>
+        <li {% if lasttime.l7.0 = rg %} class="active" {% endif %}><a href="{% url 'horizon:project:mypanel:hostid' hostid=host %}?rg={{lasttime.l7.0}}&index={{ind}}&hn={{hn}}">一周</a></li>
+        <li {% if lasttime.l30.0 = rg %} class="active" {% endif %}><a href="{% url 'horizon:project:mypanel:hostid' hostid=host %}?rg={{lasttime.l30.0}}&index={{ind}}&hn={{hn}}">30天</a></li>
+      </ul>
+</div>
+
+<form action="" method="get">
+<input type="hidden" name="hn" value="{{hn}}" />
+<input type="hidden" name="index" value="{{ind}}" />
+<label>始于 :</label>
+<input type="text" name="fr" id="datepicker1" placeholder="{{fr}}" value="{{fr}}" />
+<label>止于 :</label>
+<input type="text" name="tl" id="datepicker2" placeholder="{{tl}}" value="{{tl}}" />
+<button type="submit" class="btn btn-primary">查询</button>
+</form>
+<!-- <div class="col-md-3 pre-scrollable" > -->
+<div class="col-md-4" >
+<!-- <div style="width:200px;height:150px;line-height:3em;overflow:auto;padding:5px;"> -->
+<table class="table table-hover" id="tableid">
+      <thead>
+        <tr>
+          <th>指标</th>
+          <th>实例名称</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in ins%}
+          {% for ii in index %}
+        <tr>
+          <td class="{% if ii|lower = ind and i.0 = host %} active {% endif %}">{{ ii }}</td>
+          <td class="{% if ii|lower = ind and i.0 = host %} active  {% endif %}"><a href="{% url 'horizon:project:mypanel:hostid' hostid=i.0%}?index={{ii}}&hn={{i.1}}" >{{ i.1 }}</a></td>
+        </tr>
+          {% endfor%}
+        {% endfor %}
+      </tbody>
+    </table>
+</div>
+
+<div class="col-md-8" id="containerP"></div>
+</div>
+<script language="JavaScript">
+$(document).ready(function() {
+    $("#datepicker1").datepicker({dateFormat: 'yy-mm-dd'});
+    $("#datepicker2").datepicker({dateFormat: 'yy-mm-dd'});
+});
+</script>
+<script language="JavaScript">
+$(document).ready(function() {
+   var chart = {
+      zoomType: 'x'
+   };
+
+   var credits = {
+            text: 'UMCloud',
+            href: 'http://www.umcloud.com/'
+   };
+
+   var title = {
+      text: "{{hn}}: {{ ret.0.title }}"
+   };
+   var xAxis = {
+      type: 'datetime',
+      labels: {
+                step: 1,
+                formatter: function () {
+                    return Highcharts.dateFormat('%Y-%m-%d %H:%M', this.value );
+                    }
+             }};
+
+   var yAxis = {
+      title: {
+         text: "单位: {{ ret.0.unit }}"
+      },
+      labels: {
+        formatter: function () {
+            return this.value;
+        }
+    }
+   };
+
+   var tooltip = {
+      valueSuffix: '{{ ret.0.unit }}',
+      headerFormat: '{point.x:%Y-%m-%d %H:%M}<br>',
+      pointFormat: "{series.name}: {point.y:.3f}"
+   }
+
+   var legend = {
+       enabled: false 
+      //layout: 'vertical',
+      // align: 'right',
+      //verticalAlign: 'middle',
+      // borderWidth: 0
+   };
+
+   var exporting =  {
+        csv: {
+            dateFormat: '%Y-%m-%d %H:%M'
+        }
+    };
+
+   var setOptions = { 
+        global: 
+          { useUTC: false } 
+        }; 
+
+   var series = {{ ret.1 }} ;
+
+
+
+   var json = {};
+
+   json.title = title;
+   json.chart = chart;
+   json.xAxis = xAxis;
+   json.yAxis = yAxis;
+   json.tooltip = tooltip;
+   json.legend = legend;
+   json.series = series;
+   json.credits = credits;
+   json.setOptions = setOptions;
+
+   $('#containerP').highcharts(json);
+});
+   $('#tableid').DataTable();
+</script>
+{% endautoescape %}
+{% endblock %}
+
+

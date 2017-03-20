@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Mypanel" %}{% endblock %}
+
+{% block page_header %}
+  <script src="http://code.highcharts.com/highcharts.js"></script>
+  <link rel="stylesheet" type="text/css" href="//cdn.datatables.net/1.10.12/css/jquery.dataTables.css">
+  <script type="text/javascript" charset="utf8" src="//cdn.datatables.net/1.10.12/js/jquery.dataTables.js"></script>
+  {% include "horizon/common/_page_header.html" with title=_("Mypanel") %}
+{% endblock page_header %}
+
+{% block main %}
+{% autoescape off %}
+<div class="row">
+<!-- <div class="col-md-3 pre-scrollable" > -->
+<div class="col-md-4" >
+<!-- <div style="width:200px;height:150px;line-height:3em;overflow:auto;padding:5px;"> -->
+<table class="table table-hover" id="tableid">
+      <thead>
+        <tr>
+          <th>指标</th>
+          <th>实例名称</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in ins%}
+          {% for ii in index%}
+        <tr>
+          <td>{{ ii }}</td>
+          <td><a href="" >{{ i.1 }}</a></td>
+        </tr>
+          {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+</div>
+
+<div class="col-md-8" id="containerP"></div>
+<a href=""><button type="button" class="btn btn-primary">最近一天</button></a>
+<a href=""><button type="button" class="btn btn-primary">最近一周</button></a>
+<a href=""><button type="button" class="btn btn-primary">最近一个月</button></a>
+<a href=""><button type="button" class="btn btn-default">CSV导出</button></a>
+<form action="" method="post">
+<label>始于 :</label>
+<input type="text" name="sname" id="datepicker2"/>
+<label>止于 :</label>
+<input type="text" name="selected_date" id="datepicker"/>
+<button type="submit" class="btn btn-primary">查询</button>
+</form>
+</div>
+<script language="JavaScript">
+$(document).ready(function() {
+    $("#datepicker").datepicker({dateFormat: 'yy-mm-dd'});
+    $("#datepicker2").datepicker({dateFormat: 'yy-mm-dd'});
+});
+</script>
+<script language="JavaScript">
+$(document).ready(function() {
+   var chart = {
+      zoomType: 'x'
+   };
+
+   var credits = {
+            text: 'UMCloud',
+            href: 'http://www.umcloud.com/'
+   };
+
+   var title = {
+      text: "{{ ret.0.title }}"
+   };
+   var xAxis = {
+      type: 'datetime',
+      labels: {
+                step: 1,
+                formatter: function () {
+                    return Highcharts.dateFormat('%Y-%m-%d', this.value);
+                    }
+             }};
+
+   var yAxis = {
+      title: {
+         text: "单位: {{ ret.0.unit }}"
+      },
+      labels: {
+        formatter: function () {
+            return this.value;
+        }
+    }
+   };
+
+   var tooltip = {
+      valueSuffix: '{{ ret.0.unit }}'
+   }
+
+   var legend = {
+       enabled: false 
+      //layout: 'vertical',
+      // align: 'right',
+      //verticalAlign: 'middle',
+      // borderWidth: 0
+   };
+
+    var plotOptions = {
+      area: {
+         fillColor: {
+            linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1},
+            stops: [
+               [0, Highcharts.getOptions().colors[0]],
+               [1, Highcharts.Color(Highcharts.getOptions().colors[0]).setOpacity(0).get('rgba')]
+            ]
+         },
+         marker: {
+            radius: 2
+         },
+         lineWidth: 1,
+         states: {
+            hover: {
+               lineWidth: 1
+            }
+         },
+         threshold: 0
+      }
+   };
+
+   var series = {{ ret.1 }} ;
+
+   var json = {};
+
+   json.title = title;
+   json.chart = chart;
+   json.xAxis = xAxis;
+   json.yAxis = yAxis;
+   json.tooltip = tooltip;
+   json.legend = legend;
+   json.plotOptions = plotOptions;
+   json.series = series;
+   json.credits = credits;
+
+   $('#containerP').highcharts(json);
+});
+   $('#tableid').DataTable();
+
+</script>
+{% endautoescape %}
+{% endblock %}
+
+

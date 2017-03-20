@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Mypanel" %}{% endblock %}
+
+{% block page_header %}
+  <script src="http://code.highcharts.com/highcharts.js"></script>
+  {% include "horizon/common/_page_header.html" with title=_("Mypanel") %}
+{% endblock page_header %}
+
+{% block main %}
+<form class="form-horizontal ng-pristine ng-valid" id="linechart_general_form">
+    <div class="form-group">
+      <label for="group_by" class="col-sm-2 control-label">虚拟机名称：</label>
+      <div class="col-sm-2">
+        <select data-line-chart-command="select_box_change" id="group_by" name="group_by" class="form-control">
+          <option value="all" selected="selected">ALL</option>
+          <option selected="selected" value="project">vm1</option>
+          <option selected="selected" value="project">vm2</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="stats_attr" class="col-sm-2 control-label">监控值：</label>
+      <div class="col-sm-2">
+        <select data-line-chart-command="select_box_change" id="stats_attr" name="stats_attr" class="form-control">
+
+          <option selected="selected" value="avg">CPU</option>
+          <option value="min">Disk</option>
+          <option value="max">Network</option>
+          <option value="sum">Memory</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="date_options" class="col-sm-2 control-label">周期：</label>
+      <div class="col-sm-2">
+        <select data-line-chart-command="select_box_change" id="date_options" name="date_options" class="form-control">
+          <option value="1h" selected="selected">Last hour</option>
+          <option value="1">最近一天</option>
+          <option value="7">最近一周</option>
+          <option value="other">时间选择器</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group" id="date_from">
+      <label for="date_from" class="col-sm-2 control-label">从：</label>
+      <div class="col-sm-2">
+        <input data-line-chart-command="date_picker_change" type="text" id="date_from" name="date_from" class="form-control example">
+      </div>
+    </div>
+
+    <div class="form-group" id="date_to">
+      <label for="date_to" class="col-sm-2 control-label">至：</label>
+      <div class="col-sm-2">
+        <input data-line-chart-command="date_picker_change" type="text" name="date_to" class="form-control example">
+      </div>
+      <div class="col-sm-2">
+	<input class="btn btn-primary" type="submit" value="submit">
+      </div>
+	
+    </div>
+  </form>
+
+
+<div id="container" style="width: 800px; height: 400px; margin: 0 auto"></div>
+<script language="JavaScript">
+$(document).ready(function() {
+   var chart = {
+      zoomType: 'x'
+   }; 
+   var title = {
+      text: '当前xxx'
+   };
+   var subtitle = {
+      text: 'Source: ceilometer'
+   };
+   var xAxis = {
+      
+      type: 'datetime',
+      labels: {  
+                step: 1,   
+                formatter: function () {  
+                    return Highcharts.dateFormat('%Y-%m-%d', this.value); 
+                    }
+   }};
+
+   var yAxis = {
+      title: {
+         text: 'xxx'
+      }
+   };   
+
+
+   var legend = {
+      layout: 'vertical',
+      align: 'right',
+      verticalAlign: 'middle',
+      borderWidth: 0
+   };
+
+    var plotOptions = {
+      area: {
+         fillColor: {
+            linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1},
+            stops: [
+               [0, Highcharts.getOptions().colors[0]],
+               [1, Highcharts.Color(Highcharts.getOptions().colors[0]).setOpacity(0).get('rgba')]
+            ]
+         },
+         marker: {
+            radius: 2
+         },
+         lineWidth: 1,
+         states: {
+            hover: {
+               lineWidth: 1
+            }
+         },
+         threshold: null
+      }
+   };
+
+   var series =  [
+      {
+         type: 'area',
+         name: 'CPU',
+         pointInterval: 24 * 3600 * 1000,
+         pointStart: Date.UTC(2016, 0, 1),
+         data: [58, 73, 21, 30, 100, 92, 66, 10, 58, 45, 97, 76, 40, 23, 54, 6, 31, 39, 95, 87, 60, 84, 58, 27, 38, 45, 21, 99, 92, 11, 5, 60, 18, 18, 32, 24, 61, 32, 54, 34, 54, 13, 39, 65, 69, 74, 91, 5, 50, 72, 55, 29, 88, 63, 28, 95, 37, 30, 7, 42, 41, 48, 67, 4, 70, 68, 72, 78, 2, 50, 29, 82, 83, 57, 3, 58, 72, 73, 14, 58, 23, 52, 28, 46, 73, 94, 84, 49, 84, 63, 16, 77, 8, 55, 10, 8, 63, 72, 2, 48, 64, 86, 24, 23, 91, 91, 53, 12, 83, 81, 85, 57, 95, 44, 20, 40, 31, 72, 3, 56, 52, 23, 99, 80, 5, 30, 81, 15, 25, 93, 58, 23, 3, 100, 46, 66, 67, 32, 60, 90, 10, 75, 67, 91, 30, 15, 11, 18, 43, 55, 47, 89, 12, 77, 70, 75, 76, 68, 46, 39, 23, 72, 9, 5, 47, 51, 13, 20, 71, 55, 6, 4, 47, 29, 54, 45, 55, 25, 70, 86, 58, 25, 30, 97, 69, 7, 89, 35, 31, 23, 16, 52, 92, 54, 74, 62, 53, 95, 35, 22, 61, 1, 47, 62, 53, 74, 39, 96, 6]
+        }];
+
+   var json = {};
+   
+
+   json.title = title;
+   json.chart = chart;
+   json.subtitle = subtitle;
+   json.xAxis = xAxis;
+   json.yAxis = yAxis;
+   json.legend = legend;
+   json.plotOptions = plotOptions;
+   json.series = series;
+
+   $('#container').highcharts(json);
+});
+</script>
+{% endblock %}
+
+
