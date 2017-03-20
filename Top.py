@@ -169,14 +169,14 @@ fp4.close()
 msgImage4.add_header('Content-ID','<topurl_all>') 
 msg.attach(msgImage4)
 
-sender = 'ops@1ymoney.com' 
-receiver = 'dengning@17money.com' 
+sender = 'sender@example.com' 
+receiver = 'receiver@example.com' 
 subject = 'Top IP 测试' 
 
 server = smtplib.SMTP()
 #server.set_debuglevel(1)
-server.connect("mail.17money.com",'25')
+server.connect("mail.example.com",'25')
 server.starttls()
-server.login("nagios@17money.com","jjjr@20151")
+server.login("username@example.com","password")
 server.sendmail(sender,receiver,msg.as_string())
 server.quit()
