@@ -9,4 +9,5 @@
 - skl-img2txt.py  将图像转换为数字01标识的文本文件，用于机器学习训练图像识别。 个人满意度 :star::star::star:
 - tomde.sh 管理tomcat 个人满意度 :star::star::star:
 - trans 通过两个openstack环境的volume,image以及虚拟机的系统镜像，后端为ceph 个人满意度:star::star:
+- selfm openstack自助式监控查询 :star::star:
 
