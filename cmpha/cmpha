@@ -1,10 +1,5 @@
+#!/usr/bin/env python
 #coding: utf-8
-#compute node ha
-
-"""
-计算节点高可用
-"""
-
 import sys
 import requests
 import time
@@ -14,11 +9,9 @@ import subprocess as sp
 from ConfigParser import ConfigParser
 from pprint import pprint
 
-
 DEVNULL = open(os.devnull, 'wb')
 logfile = "/var/log/cmpha.log"
 debug=False
-debug=True
 
 level = logging.WARNING if not debug else logging.DEBUG
 logging.basicConfig(level=level,
@@ -38,10 +31,6 @@ class baseInfo(object):
 
     def __init__(self):
         confFile = sys.argv[1]
-        #a = requests.adapters.HTTPAdapter(pool_connections=3, pool_maxsize=5)
-        #self.s = requests.Session()
-        #self.s.mount("http://",a)
-        #self.s.mount("https://",a)
 
         headers = {}
         headers["Content-Type"] = "application/json"
@@ -79,7 +68,7 @@ class baseInfo(object):
         try:
             logging.debug("开始获取Token")
             ret = requests.post(url, data=data, headers=headers)
-            logging.debug("request url:%s" % ret.request.url)
+            logging.debug("request url:%s" % ret.url)
             ret = ret.json()
         except Exception as e:
             msg = "获取Token失败 data:%s headers:%s" % (data, headers)
@@ -101,6 +90,7 @@ class baseInfo(object):
         req = getattr(requests, method)
         try:
             ret = req(url, data=data, headers=headers, params=params, verify=False)
+            logging.debug("request url:%s" % ret.url)
         except Exception as e:
             msg = "%s访问%s失败 data:%s headers:%s" % (method, suffix, data, headers)
             logging.critical(msg)
@@ -108,7 +98,7 @@ class baseInfo(object):
             sys.exit(1)
 
         if ret.status_code == 401:
-            logging.info("Token 过期,重新获取Token")
+            logging.warning("Token 过期,重新获取Token")
             self.catalog, self.token = self.getToken()
             headers["X-Auth-Token"] = self.token
             logging.debug("request headers:%s" % ret.request.headers)
@@ -136,17 +126,12 @@ class check(baseInfo):
         cmpAll = [host["host"] for host in ret if host["binary"] == "nova-compute"]
         cmpDown = [host["host"] for host in ret if host["state"] != "up" and host["binary"] == "nova-compute"]
 
-        return cmpDown,cmpAll
+        return cmpDown, cmpAll
 
     def chkSerFromNode(self):
         """get the server list from failed node"""
         suffix = "/servers/detail"
-        cc = self.cf.options("ser")
-        params = None
-        if "ADMIN" in cc:
-            admin = self.cf.get("ser", "ADMIN")
-            if admin.lower() == "true":
-                params = {"all_tenants":1}
+        params = {"all_tenants":1}
 
         ret = self.getResp(suffix, "get", params=params)
 
@@ -209,20 +194,20 @@ class recover(baseInfo):
         suffix = "/servers/%s" % serID
         ret = self.getResp(suffix, "get")
         status = ret["server"]["status"]
-        print status
 
         return status
 
     def recover(self, serID):
         for s in serID:
-            self.evacuate(s)
-            time.sleep(0.5)
-
-def test():
-    ch = check()
-    ch.test()
-    fen = fence(ch.cmpDown)
-    fen.test()
+            st = self.check(s)
+            if st == "ACTIVE":
+                cmd = "rbd rm %s_disk.config -p compute" % serID
+                p = sp.Popen(cmd, shell=True, stdout=DEVNULL, stderr=sp.STDOUT)
+                r = p.wait()
+                self.evacuate(s)
+                time.sleep(0.5)
+            else:
+                logging.warning(u"虚拟机--%s--状态:%s" % (s, st))
 
 def main():
     if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
@@ -256,4 +241,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    #test()
