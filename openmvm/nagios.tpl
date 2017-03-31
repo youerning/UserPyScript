@@ -84,3 +84,22 @@ define service {
         service_description            netio
         use                            generic-service
 }
+define command {
+       command_line                   /usr/lib/nagios/plugins/check_dummy 3 'No data received for at least 130 seconds'
+        command_name                   return-virt-cpu
+}
+
+define command {
+        command_line                   /usr/lib/nagios/plugins/check_dummy 3 'No data received for at least 130 seconds'
+        command_name                   return-virt-mem
+}
+
+define command {
+        command_line                   /usr/lib/nagios/plugins/check_dummy 3 'No data received for at least 130 seconds'
+        command_name                   return-virt-disk
+}
+
+define command {
+        command_line                   /usr/lib/nagios/plugins/check_dummy 3 'No data received for at least 130 seconds'
+        command_name                   return-virt-net
+}
