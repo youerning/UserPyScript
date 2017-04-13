@@ -970,7 +970,7 @@ def main():
     prelog.info("ALL done....")
 
 if __name__ == "__main__":
-   #main()
-   #testdownload()
-   testupload()
-   #testvmware()
+    #main()
+    #testdownload()
+    testupload()
+    #testvmware()
