@@ -22,7 +22,6 @@ qvm = Queue()
 qdown = Queue()
 
 
-
 def InitLog(filename, console=True):
     logger = logging.getLogger(filename)
     logger.setLevel(logging.DEBUG)
@@ -319,8 +318,8 @@ BOOTPROTO=dhcp" > /etc/sysconfig/network-scripts/ifcfg-eth0
     def writesuffix(logfile, fname, suffix):
         if not os.path.exists(".vm"):
             os.mkdir(".vm")
-            logfile.info("Download completed")
-            open(".vm/" + fname + suffix, "a").close()
+
+        open(".vm/" + fname + suffix, "a").close()
 
 
 class base(object):
@@ -463,20 +462,27 @@ class opCli(base):
 
         url = "".join([apiURL, suffix])
 
-        with open(imgFile) as img:
-            req = requests.put(url, headers=headers, data=img)
+        try:
+            msg = "Open the img: %s" % imgFile
+            self.logfile.info(msg)
+            with open(imgFile) as img:
+                msg = "Put the img: %s" % imgPath
+                self.logfile.info(msg)
+                req = requests.put(url, headers=headers, data=img)
+        except Exception as e:
+            msg = "Open the img file failed"
+            self.logfile.critical(msg)
+            self.logfile.critical(e)
+            return None
 
         if req.status_code == 204:
             ret = "ok"
-            if not os.path.exists(".vm"):
-                os.mkdir(".vm")
-                open(".vm/" + vmname + ".upload", "a").close()
-
+            shex.writesuffix(self.logfile, vmname, ".upload")
             tmpret = shex.remove(imgFile)
             if tmpret:
                 self.logfile.critical(tmpret)
         else:
-            self.logfile.critical("upload abnormally")
+            self.logfile.critical("UPload abnormally")
             self.logfile.critical(req.content)
             ret = req.content
 
@@ -641,14 +647,30 @@ def upload():
             shex.writesuffix(logfile, vmname, ".wrong")
             continue
 
-        op = opCli()
+        op = opCli(logfile)
         imgfile = vmname + "-qcow2"
         msg = "Create the image from the vm file: %s" % vmname
         logfile.info(msg)
-        img = op.createImg(vmname)
+
+        if not shex.checkRecord(vmname, ".img"):
+            img = op.createImg(vmname)
+        else:
+            if shex.checkRecord(vmname, ".upload"):
+                logfile.info("image have been uploaded, skip this")
+            else:
+                imgdata = open(".vm/" + vmname + ".img")
+                img = json.load(imgdata)
+
+        print img
         if img:
             msg = "The image create: %s" % vmname
             logfile.info(msg)
+            shex.writesuffix(logfile, vmname, ".img")
+
+            with open(".vm/" + vmname + ".img", "w") as rf:
+                json.dump(img, rf)
+
+            logfile.info("The image created")
         else:
             logfile.critical("Image create failed!!!")
             shex.writesuffix(logfile, vmname, ".wrong")
@@ -658,10 +680,20 @@ def upload():
         imgID = img["id"]
 
         logfile.info("UPload image")
-        uploadRet = op.uploadImg(imgPath, imgfile, vmname)
+        uploaded = shex.checkRecord(vmname, ".upload")
+        msg = "Check if the image uploaded: %s" % uploaded
+        logfile.info(msg)
+
+        if not shex.checkRecord(vmname, ".upload"):
+            uploadRet = op.uploadImg(imgPath, imgfile, vmname)
+        else:
+            uploadRet = "uploaded"
+
         if uploadRet == "ok":
             logfile.info("UPload completed")
             shex.writesuffix(logfile, vmname, ".upload")
+        elif uploadRet == "uploaded":
+            logfile.info("Have been uploaded")
         else:
             logfile.critical("UPload failed")
             logfile.critical(uploadRet)
@@ -670,7 +702,11 @@ def upload():
 
         try:
             ext_vlan = "MC_VLAN_10.2." + vmip.split(".")[2]
+            msg = "The floating ip network: %s" % ext_vlan
+            logfile.info(msg)
             fix_vlan = op.cf.get(ext_vlan, "fix")
+            msg = "The fixed ip network: %s" % fix_vlan
+            logfile.info(msg)
         except Exception as e:
             logfile.critical("The network is invalid")
             logfile.error(e)
@@ -679,20 +715,50 @@ def upload():
             continue
 
         networklis = op.listNet()["networks"]
-        network = [net["id"] for net in networklis if net["name"] == fix_vlan][0]
+        #print networklis
+
+        network = [net["id"] for net in networklis if net["name"] == fix_vlan]
+
+        if network:
+            network = network[0]
+            msg = "Get the fixed network: %s" % network
+            logfile.info()
+        else:
+            logfile.critical("Can't get the fixed network")
+            shex.writesuffix(logfile, vmname, ".wrong")
+            continue
 
         flavorlis = op.listFlavor()["flavors"]
         flavor = [[f["id"], f["ram"], f["vcpus"], f["disk"]] for f in flavorlis if f["ram"] >= vmmem and f["vcpus"] >= vmcpu and f["disk"] >= vmdisk]
+
         if len(flavor) > 1:
             flavor.sort(key=lambda x: x[3])
             flavor = flavor[0][0]
+            msg = "There more than one flaors for select,so random select disk most mininal: %s" % flavor
+            logfile.info(msg)
+
         elif len(flavor) == 0:
+            logfile.info("There no suitable flavor for specify")
+            msg = "Try create the flavor: mem:: %s, cpu:: %s, disk:: %s" % (vmmem, vmcpu, vmdisk)
+            logfile.info(msg)
             flavor = op.creatFlavor(vmmem, vmcpu, vmdisk)
         else:
+            msg = "only one flavor for select: %s" % flavor
+            logfile.info(msg)
             flavor = flavor[0][0]
 
+        if flavor:
+            logfile.info("Flavor selected succuess")
+        else:
+            logfile.critical("Flavor selected failed")
+            logfile.critical("Exit.....")
+            continue
+
         instance = "-".join([vmowner, vmname])
+        msg = "Try to create the server: instanceName:: %s imgID:: %s network:: %s" %(instance, imgID, network)
         server = op.boot(instance, imgID, flavor, network)
+        msg = "The server boot action status: %s" % server.status_code
+        logfile.info(msg)
 
         if server:
             if server.status_code == 202:
@@ -707,6 +773,7 @@ def upload():
             continue
 
         serverID = server["server"]["id"]
+        msg = "Try to add floating ip to the instance: %s" % vmip
         floatingip = op.addFlotingIP(serverID, vmip)
 
         if floatingip:
@@ -720,6 +787,7 @@ def upload():
             logfile.critical("Add floationgip  failed")
             shex.writesuffix(logfile, vmname, ".wrong")
 
+    logfile.info("UPload process done......")
 
 def batch(action, size, *args):
     """batch run the action for higher performance"""
@@ -903,5 +971,6 @@ def main():
 
 if __name__ == "__main__":
    #main()
-   testdownload()
+   #testdownload()
+   testupload()
    #testvmware()
