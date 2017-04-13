@@ -11,3 +11,4 @@
 - trans 通过两个openstack环境的volume,image以及虚拟机的系统镜像，后端为ceph 个人满意度:star::star:
 - selfm openstack自助式监控查询 :star::star:
 - openmvm openstack虚拟机监控 个人满意度:star::star::star:
+- vmconvert vmdk convert to openstack(kvm) 个人满意度:star::star::star::star:
