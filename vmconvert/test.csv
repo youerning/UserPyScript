@@ -1,0 +1,2 @@
+vmrelease,vmuser,vmpass,vmip,exsiip,exsiuser,exsipass,vmname,vmmem,vmcpu,vmdisk,vmowner,vmproject,multidisk
+centos6,root,r00tme,10.2.117.214,10.2.132.43,root,password2012,dengning-centos6.7-tlp-20161117,4,1,100,test,admin,0
