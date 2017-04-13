@@ -310,15 +310,8 @@ BOOTPROTO=dhcp" > /etc/sysconfig/network-scripts/ifcfg-eth0
     @staticmethod
     def checkRecord(vmname, method):
         """check the file is downloaded or upload"""
-        if method == "download":
-            fpath = ".vm/" + vmname + ".download"
-            ret = os.path.exists(fpath)
-        elif method == "convert":
-            fpath = ".vm/" + vmname + ".convert"
-            ret = os.path.exists(fpath)
-        else:
-            print "Fuck you imput"
-            ret = False
+        fpath = ".vm/" + vmname + method
+        ret = os.path.exists(fpath)
 
         return ret
 
@@ -564,10 +557,14 @@ def download():
         logfile = InitLog(vm[7], console=True)
         logfile.info("===Download Process start===")
         logfile.info("get the infomation: %s" % vm)
+        if shex.checkRecord(vm[7], ".wrong"):
+            logfile.warning("The vm is wrong, skip this")
+            continue
 
         try:
             vmrelease,vmuser,vmpass,vmip,exsiip,exsiuser,exsipass,vmname,vmmem,vmcpu,vmdisk,vmowner,vmproject,multidisk = vm
             vmowner = tryencode(vmowner)
+            vmname = tryencode(vmname)
             #print vmrelease
         except Exception as e:
             msg = "The vm data is wrong: %s " % vm
@@ -576,10 +573,14 @@ def download():
             shex.writesuffix(logfile, vmname, ".wrong")
             continue
 
+        if shex.checkRecord(vm[7], ".wrong"):
+            logfile.warning("The vm is wrong, skip this")
+            continue
+
         shx = shex(exsiip, exsipass, vmname, logfile)
-        msg = "Check if the vm have been downloaded: %s" % vmname
+        downloaded = shx.checkRecord(vmname, ".download")
+        msg = "Check if the vm have been downloaded: %s" % downloaded
         logfile.info(msg)
-        downloaded = shx.checkRecord(vmname, "download")
         if not downloaded:
             shx.poweroff(vmrelease, vmip, vmuser, vmpass)
             ret = shx.VirtDown()
@@ -589,12 +590,21 @@ def download():
                 shex.writesuffix(logfile, vmname, ".wrong")
                 continue
 
-        if vmrelease.lower() == "ubuntu":
-            if not shx.checkRecord(vmname, "convert"):
+        if shex.checkRecord(vm[7], ".wrong"):
+            logfile.warning("The vm is wrong, skip this")
+            continue
+
+        converted = shx.checkRecord(vmname, ".convert")
+        msg = "Check if the vm have been converted: %s" % converted
+        logfile.info(msg)
+        if not shx.checkRecord(vmname, ".convert"):
+            if vmrelease.lower() == "ubuntu":
                 ret = shx.VirtConvert2()
-        else:
-            if not shx.checkRecord(vmname, "convert"):
+            else:
                 ret = shx.VirtConvert1()
+        else:
+            logfile.info("Converted")
+            ret = True
 
         if ret:
             logfile.info("Put the converted vm to the queue for upload.....")
@@ -612,15 +622,23 @@ def upload():
     print msg
     while True:
         vm = qdown.get()
-        vmrelease,vmuser,vmpass,vmip,exsiip,exsiuser,exsipass,vmname,vmmem,vmcpu,vmdisk,vmowner,vmproject,multidisk = vm
-        vmowner = tryencode(vmowner)
 
-        logfile = InitLog(vmname, console=True)
+        logfile = InitLog(vm[7], console=True)
         logfile.info("===UPload Process start===")
         logfile.info("Get the infomation: %s" % vm)
+        if shex.checkRecord(vm[7], ".wrong"):
+            logfile.warning("The vm is wrong, skip this")
+            continue
 
-        if shex.checkRecord(vmname, ".wrong"):
-            logfile.info("The vm is wrong,skip this")
+        try:
+            vmrelease,vmuser,vmpass,vmip,exsiip,exsiuser,exsipass,vmname,vmmem,vmcpu,vmdisk,vmowner,vmproject,multidisk = vm
+            vmowner = tryencode(vmowner)
+            vmname = tryencode(vmname)
+        except Exception as e:
+            msg = "The vm data is wrong: %s " % vm
+            logfile.critical(msg)
+            logfile.critical(e)
+            shex.writesuffix(logfile, vmname, ".wrong")
             continue
 
         op = opCli()
@@ -777,16 +795,18 @@ def testopenstack():
 
 
 def testdownload():
+    prelog = InitLog("testdownload")
     if len(sys.argv) < 2:
-        print "没有指定配置文件,启动失败"
-
-    prelog = InitLog("pre")
+        prelog.critical("Have no sepecify the vm.conf")
+        pre.critical("Exit....")
+        sys.exit(1)
 
     op = opCli(prelog)
     csvformat = ['vmrelease','vmuser','vmpass','vmip','exsiip','exsiuser','exsipass','vmname','vmmem','vmcpu','vmdisk','vmowner','vmproject','multidisk']
     #print csvformat
     if not op.pre():
-        print "配置文件有误"
+        pre.critical("The vm.conf configuration is wrong!!!!")
+        pre.critical("Exit....")
         sys.exit(1)
 
     csvfile = op.cf.get("vm", "path")
@@ -800,24 +820,24 @@ def testdownload():
                 qvm.put(line)
                 #print "====>empty", qvm.empty()
         else:
-            print "虚拟机列表文件有误"
+            prelog.critical("The format,header of vm is wrong!!!")
+            pre.critical("Exit....")
             sys.exit(1)
 
     download()
-    print "Download done...."
+    prelog.info("Download done....")
 
 
 def testupload():
+    prelog = InitLog("testupload")
     if len(sys.argv) < 2:
-        print "没有指定配置文件,启动失败"
-
-    prelog = InitLog("pre")
+        prelog.critical("Have no sepecify the vm.conf")
 
     op = opCli(prelog)
     csvformat = ['vmrelease','vmuser','vmpass','vmip','exsiip','exsiuser','exsipass','vmname','vmmem','vmcpu','vmdisk','vmowner','vmproject','multidisk']
     #print csvformat
     if not op.pre():
-        print "配置文件有误"
+        pre.critical("The vm.conf configuration is wrong!!!!")
         sys.exit(1)
 
     csvfile = op.cf.get("vm", "path")
@@ -831,24 +851,24 @@ def testupload():
                 qdown.put(line)
                 #print "====>empty", qvm.empty()
         else:
-            print "虚拟机列表文件有误"
+            prelog.critical("The format,header of vm is wrong!!!")
+            pre.critical("Exit....")
             sys.exit(1)
 
     upload()
-    print "Download done...."
+    prelog.info("UPload done....")
 
 
 def main():
+    prelog = InitLog("main")
     if len(sys.argv) < 2:
-        print "没有指定配置文件,启动失败"
-
-    prelog = InitLog("pre")
+        prelog.critical("Have no sepecify the vm.conf")
 
     op = opCli(prelog)
     csvformat = ['vmrelease','vmuser','vmpass','vmip','exsiip','exsiuser','exsipass','vmname','vmmem','vmcpu','vmdisk','vmowner','vmproject','multidisk']
     #print csvformat
     if not op.pre():
-        print "配置文件有误"
+        pre.critical("The vm.conf configuration is wrong!!!!")
         sys.exit(1)
 
     csvfile = op.cf.get("vm", "path")
@@ -857,15 +877,20 @@ def main():
         header = csvreader.next()
         #print header
         if header == csvformat:
+            prelog.info("CSV format vaild")
+            prelog.inf("Put the vm infomation to queue....")
             for line in csvreader:
                 qvm.put(line)
+            prelog.inf("Put done...")
         else:
-            print "虚拟机列表文件有误"
+            prelog.critical("The format,header of vm is wrong!!!")
             sys.exit(1)
 
     cf = ConfigParser()
     cf.read(sys.argv[1])
+    prelog.info("Start the download process...")
     downSize = cf.getint("multiprocess", "download")
+    prelog.info("Start the upload process...")
     upSize = cf.getint("multiprocess", "upload")
     downloadProc = batch(download, downSize)
     uploadProc = batch(upload, upSize)
@@ -874,6 +899,7 @@ def main():
     uploadProc.close()
     downloadProc.join()
     uploadProc.join()
+    prelog.info("ALL done....")
 
 if __name__ == "__main__":
    #main()
