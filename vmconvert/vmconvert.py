@@ -3,7 +3,7 @@
 import logging
 import re
 import time
-from multiprocessing import Pool
+from multiprocessing import Pool,Queue
 import sys
 from ConfigParser import ConfigParser
 import requests
@@ -14,9 +14,13 @@ import signal
 import os
 from os import path
 import paramiko
-from Queue import Queue
+#from Queue import Queue
+import sys
+reload(sys)
 
-# the qvm is the queue for the vm is not downloaded
+sys.setdefaultencoding('utf-8')
+
+# the qvm is the queue for the vm is not downloadeds
 qvm = Queue()
 # the qdown is queue for vm has downloaded
 qdown = Queue()
@@ -59,7 +63,7 @@ def diskusage(path, unit=None):
 
 def tryencode(name):
     try:
-        name = name.decode("gbk").encode("utf8")
+        name = name.decode("gbk")
         return name
     except Exception as e:
         return name
@@ -414,6 +418,7 @@ class base(object):
             ret = req(url, data=data, headers=headers, params=params, verify=False)
             #print ret.url
             #print ret.content
+
             self.logfile.debug("request url:%s" % ret.url)
             if ret.status_code == 401:
                 self.logfile.warning("Token expired, acquire token again")
@@ -423,7 +428,14 @@ class base(object):
                 ret = req(url, data=data, headers=headers)
 
             if isjson:
-                ret = ret.json()
+                retCode = ret.status_code
+                if ret.content:
+                    ret = ret.json()
+                else:
+                    ret = {}
+
+                ret["status_code"] = retCode
+
         except Exception as e:
             msg = "The method:%s for path:%s failed \ndata:%s \nheaders:%s" % (method, suffix, data, headers)
             self.logfile.critical(msg)
@@ -551,6 +563,23 @@ class opCli(base):
 
         return ret
 
+    def getfixip(self, serID):
+        """get the fixed ip of the server"""
+        suffix = "/servers/" + serID
+
+        resp = self.getResp(suffix, "get")
+
+        if resp["status_code"] == 200:
+            try:
+                fixedip = resp["server"]["addresses"]["private"][0]["addr"]
+            except Exception as e:
+                self.logfile.critical("Get the fixed ip failed")
+                self.logifle.critical(e)
+        else:
+            fixedip = None
+
+        return fixedip
+
 
 def download():
     """download the vmdk file and convert"""
@@ -621,10 +650,10 @@ def download():
             shex.writesuffix(logfile, vmname, ".wrong")
 
 
-def upload():
+def upload(bootimg=True):
     """upload the converted image and boot a server from the image"""
     empty = qdown.empty()
-    msg = "the downloaded vm of Queue empty is %s" % empty
+    msg = "upload vm of Queue empty is %s" % empty
     print msg
     while True:
         vm = qdown.get()
@@ -640,6 +669,9 @@ def upload():
             vmrelease,vmuser,vmpass,vmip,exsiip,exsiuser,exsipass,vmname,vmmem,vmcpu,vmdisk,vmowner,vmproject,multidisk = vm
             vmowner = tryencode(vmowner)
             vmname = tryencode(vmname)
+            vmmem = int(vmmem) * 1024
+            vmcpu = int(vmcpu)
+            vmdisk = int(vmdisk)
         except Exception as e:
             msg = "The vm data is wrong: %s " % vm
             logfile.critical(msg)
@@ -657,11 +689,12 @@ def upload():
         else:
             if shex.checkRecord(vmname, ".upload"):
                 logfile.info("image have been uploaded, skip this")
+                continue
             else:
                 imgdata = open(".vm/" + vmname + ".img")
                 img = json.load(imgdata)
 
-        print img
+        #print img
         if img:
             msg = "The image create: %s" % vmname
             logfile.info(msg)
@@ -700,6 +733,10 @@ def upload():
             shex.writesuffix(logfile, vmname, ".wrong")
             continue
 
+        if not bootimg:
+            logfile.info("Just download the image and upload...skip the action of boot")
+            continue
+
         try:
             ext_vlan = "MC_VLAN_10.2." + vmip.split(".")[2]
             msg = "The floating ip network: %s" % ext_vlan
@@ -722,15 +759,22 @@ def upload():
         if network:
             network = network[0]
             msg = "Get the fixed network: %s" % network
-            logfile.info()
+            logfile.info(msg)
         else:
             logfile.critical("Can't get the fixed network")
             shex.writesuffix(logfile, vmname, ".wrong")
             continue
 
         flavorlis = op.listFlavor()["flavors"]
-        flavor = [[f["id"], f["ram"], f["vcpus"], f["disk"]] for f in flavorlis if f["ram"] >= vmmem and f["vcpus"] >= vmcpu and f["disk"] >= vmdisk]
+        #print flavorlis
+        #flavorlis4debug = [[f["id"], f["ram"], f["vcpus"], f["disk"]] for f in flavorlis]
+        #print flavorlis4debug
 
+        msg = "vm flavor: mem:: %s, cpu:: %s, disk:: %s" % (vmmem, vmcpu, vmdisk)
+        logfile.info(msg)
+
+        flavor = [[f["id"], f["ram"], f["vcpus"], f["disk"]] for f in flavorlis if f["ram"] >= vmmem and f["vcpus"] >= vmcpu and f["disk"] >= vmdisk]
+        print flavor
         if len(flavor) > 1:
             flavor.sort(key=lambda x: x[3])
             flavor = flavor[0][0]
@@ -741,7 +785,7 @@ def upload():
             logfile.info("There no suitable flavor for specify")
             msg = "Try create the flavor: mem:: %s, cpu:: %s, disk:: %s" % (vmmem, vmcpu, vmdisk)
             logfile.info(msg)
-            flavor = op.creatFlavor(vmmem, vmcpu, vmdisk)
+            flavor = op.createFlavor(vmmem, vmcpu, vmdisk)
         else:
             msg = "only one flavor for select: %s" % flavor
             logfile.info(msg)
@@ -755,13 +799,11 @@ def upload():
             continue
 
         instance = "-".join([vmowner, vmname])
-        msg = "Try to create the server: instanceName:: %s imgID:: %s network:: %s" %(instance, imgID, network)
+        msg = "Try to create the server: instanceName:: %s imgID:: %s network:: %s" % (instance, imgID, network)
         server = op.boot(instance, imgID, flavor, network)
-        msg = "The server boot action status: %s" % server.status_code
-        logfile.info(msg)
 
         if server:
-            if server.status_code == 202:
+            if "server" in server:
                 logfile.info("Boot the image success!!!")
             else:
                 logfile.critical("Boot the image failed")
@@ -774,27 +816,31 @@ def upload():
 
         serverID = server["server"]["id"]
         msg = "Try to add floating ip to the instance: %s" % vmip
+        time.sleep(3)
         floatingip = op.addFlotingIP(serverID, vmip)
 
         if floatingip:
-            if floatingip.status_code == 202:
+            if floatingip["status_code"] == 202:
                 logfile.info("Add floationgip success!!!")
             else:
-                logfile.critical("Add floationgip  failed")
+                logfile.critical("Add floationgip failed")
+                logfile.critical(floatingip)
                 shex.writesuffix(logfile, vmname, ".wrong")
                 continue
         else:
             logfile.critical("Add floationgip  failed")
+            logfile.critical("HTTP failed maybe.....")
             shex.writesuffix(logfile, vmname, ".wrong")
 
     logfile.info("UPload process done......")
 
-def batch(action, size, *args):
+
+def batch(action, size, *args, **bootimg):
     """batch run the action for higher performance"""
     #print action,size,args
     p = Pool(size)
     for i in range(size):
-        p.apply_async(action)
+        p.apply_async(action, kwds=bootimg)
 
     return p
 
@@ -946,31 +992,41 @@ def main():
         #print header
         if header == csvformat:
             prelog.info("CSV format vaild")
-            prelog.inf("Put the vm infomation to queue....")
+            prelog.info("Put the vm infomation to queue....")
             for line in csvreader:
                 qvm.put(line)
-            prelog.inf("Put done...")
+            prelog.info("Put done...")
+
         else:
             prelog.critical("The format,header of vm is wrong!!!")
             sys.exit(1)
 
     cf = ConfigParser()
     cf.read(sys.argv[1])
-    prelog.info("Start the download process...")
+
+    try:
+        prelog.info("Try to get the bootimg seeting")
+        bootimg = cf.getboolean("openstack", "bootimg")
+    except Exception as e:
+        prelog.warning("Get the bootimg setting failed")
+        prelog.warning("set the bootimg=True.....")
+        bootimg = True
+
     downSize = cf.getint("multiprocess", "download")
-    #prelog.info("Start the upload process...")
-    #upSize = cf.getint("multiprocess", "upload")
+    upSize = cf.getint("multiprocess", "upload")
+    prelog.info("Start the download process...")
     downloadProc = batch(download, downSize)
-    #uploadProc = batch(upload, upSize)
+    prelog.info("Start the upload process...")
+    uploadProc = batch(upload, upSize, bootimg=bootimg)
 
     downloadProc.close()
-    #uploadProc.close()
+    uploadProc.close()
     downloadProc.join()
-    #uploadProc.join()
+    uploadProc.join()
     prelog.info("ALL done....")
 
 if __name__ == "__main__":
-    main()
-    #testdownload()
-    #testupload()
-    #testvmware()
+   main()
+   #testdownload()
+   #testupload()
+   #testvmware()
