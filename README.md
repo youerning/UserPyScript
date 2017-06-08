@@ -12,3 +12,4 @@
 - selfm openstack自助式监控查询 :star::star:
 - openmvm openstack虚拟机监控 个人满意度:star::star::star:
 - vmconvert vmdk convert to openstack(kvm) 个人满意度:star::star::star::star:
+- simple_spider 爬一下百科词条 个人满意度:star::star:
