@@ -1,0 +1,18 @@
+2,2017/8/1,2017/8/30,,,,,,
+Project ID:,xxx,,,,,,,
+Active Instances:,9,,,,,,,
+Total VCPU Usage (Hours):,20725.17,,,,,,,
+Total Active RAM (MB):,221184,,,,,,,
+Total Memory Usage (Hours):,42445156.04,,,,,,,
+Total Disk Size (GB):,900,,,,,,,
+Total Disk Usage (Hours):,172751.03,,,,,,,
+Instance Name,VCPUs,RAM (MB),Disk (GB),Usage (Hours),Time since created (Seconds),State,dataDisk,end
+server1,4,8192,100,192.08,2017/9/1,Active,100,2017/9/22
+server2,4,8192,100,192.08,2017/9/1,Active,100,2017/9/22
+server12,4,8192,100,192.08,2017/9/1,Active,100,2017/9/22
+server11,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
+server12,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
+server11,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
+server1,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
+server1,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
+server12,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30

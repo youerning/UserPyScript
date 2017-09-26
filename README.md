@@ -14,3 +14,4 @@
 - vmconvert vmdk convert to openstack(kvm) 个人满意度:star::star::star::star:
 - simple_spider 爬一下百科词条 个人满意度:star::star:
 - billing openstack计费:star::star::star:
+> expaple: python billing.py billing.conf -p csv or python billing.py billing.conf -p csv -o csv

@@ -1,0 +1,18 @@
+Usage Report For Period:,2017/8/1,2017/8/30,,,,,,
+Project ID:,yyyyy,,,,,,,
+Active Instances:,9,,,,,,,
+Total VCPU Usage (Hours):,20725.17,,,,,,,
+Total Active RAM (MB):,221184,,,,,,,
+Total Memory Usage (Hours):,42445156.04,,,,,,,
+Total Disk Size (GB):,900,,,,,,,
+Total Disk Usage (Hours):,172751.03,,,,,,,
+Instance Name,VCPUs,RAM (MB),Disk (GB),Usage (Hours),Time since created (Seconds),State,dataDisk,end
+instance1,4,8192,100,192.08,2017/9/1,Active,100,2017/9/22
+instance12,4,8192,100,192.08,2017/9/1,Active,100,2017/9/22
+instance13,4,8192,100,192.08,2017/9/1,Active,100,2017/9/22
+instance14,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
+instance15,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
+instance16,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
+instance17,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
+instance18,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
+instance19,16,32768,100,191.88,2017/9/1,Active,100,2017/9/30
