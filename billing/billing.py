@@ -1,4 +1,4 @@
-#coding: utf-8
+# coding: utf-8
 from __future__ import print_function
 import logging
 import sys
@@ -11,10 +11,6 @@ from os import path
 from glob import glob
 from datetime import datetime
 import json
-import sys
-reload(sys)
-
-sys.setdefaultencoding('utf-8')
 
 
 def InitLog(filename, console=True):
@@ -268,22 +264,25 @@ class billing(base):
         # system disk now
         retLis = []
         for server in serverLis:
-            now = datetime.now()
+            # now = datetime.now()
             flavor = "{}-{}".format(server[1], int(server[2]) / 1024)
+            flavorStr = "{}c-{}G".format(*flavor.split("-"))
             flavorPrice = float(self.conf[flavor])
-            strformat = "%b. %d, %Y"
-            dataDisk = int(server[-1])
+            strformat = "%Y/%m/%d"
+            dataDisk = int(server[-2])
             dataDiskPrice = float(self.conf["disk"])
             createDate = server[5].strip()
             createTime = datetime.strptime(createDate, strformat)
-            diff = now - createTime
-            days = diff.days + 1
+            endDate = server[-1].strip()
+            endTime = datetime.strptime(endDate, strformat)
+            diff = endTime - createTime
+            days = diff.days + 1 if diff.days else diff.days
             # print(flavor, flavorPrice, dataDisk, dataDiskPrice)
             serverSum = days * flavorPrice
             dataDiskSum = dataDisk * days * dataDiskPrice
             total = serverSum + dataDiskSum
-            retLis.append([server[0], flavor, flavorPrice, dataDisk,
-                        dataDiskPrice, days, createTime, now, serverSum,
+            retLis.append([server[0], flavorStr, flavorPrice, dataDisk,
+                        dataDiskPrice, days, createTime, endTime, serverSum,
                         dataDiskSum, total])
 
         totalS = sum([x[8] for x in retLis])
@@ -296,14 +295,17 @@ class billing(base):
     def stdout(self):
         # stdout
         companyLis = self.dataSet.keys()
+        totalAll = 0
         retLis = []
         for company in companyLis:
+            totalAll += self.dataSet[company][-1][-1]
             ret = self.stdRender(company, self.dataSet[company])
             ret = "".join(ret)
             retLis.append(ret)
 
         output = "\n".join(retLis)
         print(output)
+        print("\n".join(["=" * 154, "All Project: " + str(totalAll)]))
 
     def stdRender(self, company, data):
         # render to stdout
@@ -331,7 +333,7 @@ class billing(base):
         csvHeader = [x.strip() for x in csvHeader]
 
         for company in companyLis:
-            with open(company + ".csv", "w") as wf:
+            with open(path.join("export", company + "-billing.csv"), "w") as wf:
                 rows = self.dataSet[company]
                 csvWriter = csv.writer(wf)
                 csvWriter.writerow(csvHeader)
@@ -356,8 +358,6 @@ class billing(base):
         except Exception as e:
             self.logfile.critical(e)
             self.logfile.critical("export faild")
-        finally:
-            self.logfile.info("~done~")
 
 
 def calc(logfile, confile,
@@ -372,6 +372,7 @@ def calc(logfile, confile,
 
     logfile.info("calculate completely")
     bill.billing(output=output)
+    logfile.info("~done~")
 
 
 if __name__ == "__main__":
