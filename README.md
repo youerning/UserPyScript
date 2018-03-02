@@ -16,3 +16,4 @@
 - billing openstack计费:star::star::star:
 > expaple: python billing.py billing.conf -p csv or python billing.py billing.conf -p csv -o csv
 - makeMoney: 计算复利的力量:star::star:
+- monitor: 股票监控 :star::star:
