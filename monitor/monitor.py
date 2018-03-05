@@ -51,7 +51,8 @@ def down_code():
     from bs4 import BeautifulSoup
     import json
     url = "http://quote.eastmoney.com/stocklist.html"
-    headers = {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36"}
+    headers = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)\
+     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36"}
     page = requests.get(url, headers=headers)
 
     soup = BeautifulSoup(page.content.decode("gbk"), "lxml")
@@ -207,8 +208,8 @@ def report(s_lis, h_lis, subject="Breakthrough"):
     """create report for given code
 
     Args:
-        sbrk: soft-breakthrough list
-        hbrk: hard-breakthrough list
+        s_lis: soft list
+        h_lis: hard list
         subject: subject of notification
 
     Returns:
@@ -258,6 +259,24 @@ def report(s_lis, h_lis, subject="Breakthrough"):
                 msg = tpl.format(name=stock.name, wd="hard-withdown(5%)", **stock.data)
                 ret.append(msg)
 
+    elif subject == "Stop loss":
+        tpl = """stop loss: {sl}
+        Code: {code} {name}
+        Price: {close} {pchange:.3} {change:.3}
+        MA10/20/50: {MA10:.5} {MA20:.5} {MA50:.5}
+        """
+        for stock in s_lis:
+            # print(code.name)
+            if should_sent(stock.code, "soft-stoploss"):
+                msg = tpl.format(name=stock.name, sl="soft-stoploss(3%)", **stock.data)
+                ret.append(msg)
+
+        for stock in h_lis:
+            # print(code.name)
+            if should_sent(stock.code, "hard-stoploss"):
+                msg = tpl.format(name=stock.name, sl="hard-stoploss(5%)", **stock.data)
+                ret.append(msg)
+
     if ret:
         split_line = "".join(["\n", "-" * 30, "\n"])
         message = split_line.join(ret)
@@ -267,9 +286,9 @@ def report(s_lis, h_lis, subject="Breakthrough"):
 def inform(subject, msg):
     """inform user
     """
-    # from utils import sendMail
-    # print("send eamil...")
-    # sendMail(subject, msg)
+    from utils import sendMail
+    print("send eamil...")
+    sendMail(subject, msg)
     print(subject, "\n", msg)
 
 
@@ -285,11 +304,7 @@ def should_sent(code, status):
         True or False
         example:
 
-        if it never sent before,send.
-        if it have sent with soft-breakthrough and soft-breakthrough now, ingore this.
-        if it have sent with soft-breakthrough and hard-breakthrough now, sned.
-        if it have sent with hard-breakthrough and soft-breakthrough now, ingore.
-        if it have sent with hard-breakthrough and hard-breakthrough now, ingore.
+        if it never sent before, send.
     """
     tformat = "%Y-%m-%d %H:%M"
     now = datetime.datetime.now()
@@ -305,7 +320,7 @@ def should_sent(code, status):
     last_time = datetime.datetime.strptime(content["last_time"], tformat)
 
     if now.date() > last_time.date():
-        print("before")
+        # print("before")
         content["last_time"] = now.strftime(tformat)
         content["status"] = {}
         content["status"][code] = status
@@ -314,7 +329,7 @@ def should_sent(code, status):
         return True
 
     elif now.date() == last_time.date():
-        print("now")
+        # print("now")
         last_status = content["status"].get(code)
         if last_status == status:
             return False
@@ -330,18 +345,22 @@ def should_sent(code, status):
 
 def main():
     # define hard-breakthrough,soft-breakthrough list
-    hbrk = []
-    sbrk = []
+    hbrk_lis = []
+    sbrk_lis = []
 
     # define hard-withdraw, sort-withdraw list
-    hwd = []
-    swd = []
+    hwd_lis = []
+    swd_lis = []
+
+    # define soft stop loss,hard stop loss list
+    ssl_lis = []
+    hsl_lis = []
 
     attention_lis = conf["default"]["attention"]
     attention_lis = attention_lis.split()
 
-    position_lis = conf["default"]["position"]
-    position_lis = position_lis.split()
+    position_lis = conf.options("position")
+    # position_lis = position_lis.split()
 
     # breakthrough, index 0 is soft-breakthrough, index 1 is hard-breakthrough
     brk = conf["default"]["breakthrough"]
@@ -359,31 +378,58 @@ def main():
         if df.pchange[-1] > brk[1]:
             # print(stock)
             data = bar(stock, df)
-            hbrk.append(data)
+            hbrk_lis.append(data)
             continue
         if df.pchange[-1] > brk[0]:
             # print(stock)
             data = bar(stock, df)
-            sbrk.append(data)
+            sbrk_lis.append(data)
 
-    if hbrk or sbrk:
-        report(sbrk, hbrk)
+    if hbrk_lis or sbrk_lis:
+        report(sbrk_lis, hbrk_lis)
 
     for stock in position_lis:
+        # the cost of the stock
+        cost = float(conf["position"][stock])
         df = fetch(stock)
         df = pchange(df)
         df = ma(df)
 
+        # check if the percent of  price change of stock decrease 5%
         if df.pchange[-1] < -wd[1]:
             data = bar(stock, df)
-            hwd.append(data)
+            hwd_lis.append(data)
             continue
+        # check if the percent of  price change of stock decrease 3%
         if df.pchange[-1] < -wd[0]:
             data = bar(stock, df)
-            swd.append(data)
+            swd_lis.append(data)
 
-    if swd or hwd:
-        report(swd, hwd, subject="Withdraw")
+    if swd_lis or hwd_lis:
+        report(swd_lis, hwd_lis, subject="Withdraw")
+
+    for stock in position_lis:
+        # the cost of the stock
+        cost = float(conf["position"][stock])
+        df = fetch(stock)
+        df = pchange(df)
+        df = ma(df)
+
+        # position of stop loss
+        sslp = cost * (1 - wd[0])
+        hslp = cost * (1 - wd[1])
+
+        if df.close[-1] < hslp:
+            data = bar(stock, df)
+            hsl_lis.append(data)
+            continue
+
+        if df.close[-1] < sslp:
+            data = bar(stock, df)
+            ssl_lis.append(data)
+
+    if ssl_lis or hsl_lis:
+        report(ssl_lis, hsl_lis, subject="Stop loss")
 
 
 if __name__ == '__main__':
