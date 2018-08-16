@@ -39,5 +39,5 @@ def calc(p=12, e=0.1):
 
 
 if __name__ == "__main__":
-    calc()
-
+    # calc()
+    calc(p=24)
