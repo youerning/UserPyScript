@@ -18,3 +18,6 @@
 - makeMoney: 计算复利的力量:star::star:
 - monitor: 股票监控 :star::star:
 - asyncio_scrape: python异步爬虫demo :star::star:
+
+## 引用
+- tensorflow_self_check.py: tensorflow安装检查 [tensorflow_self_check.py](https://gist.github.com/donigian/b3da07cf3c7d9d03e03793d2f740cb39)
